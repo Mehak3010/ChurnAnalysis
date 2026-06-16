@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,16 +9,91 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, classification_report
-import warnings
-warnings.filterwarnings('ignore')
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 
-# Set page configuration
+# Page Config
 st.set_page_config(
-    page_title="Telco Customer Churn Analysis Dashboard",
-    page_icon="📊",
-    layout="wide"
+    page_title="Churn Analytics",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
+
+# Clean CSS
+st.markdown("""
+    <style>
+        .stApp { background-color: #f8fafc; }
+        header { visibility: hidden; }
+        .block-container { padding: 0.5rem 4rem !important; max-width: 1600px !important; }
+        
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 18px;
+            margin-bottom: 18px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        }
+        
+        .header-bar {
+            background: white;
+            padding: 18px 48px;
+            margin: -0.5rem -4rem 1.5rem -4rem;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .logo {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 22px;
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 16px;
+            padding: 18px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        
+        .metric-card.blue { border-left: 4px solid #3b82f6; background: linear-gradient(90deg, #f0f9ff 0%, white 100%); }
+        .metric-card.red { border-left: 4px solid #ef4444; background: linear-gradient(90deg, #fef2f2 0%, white 100%); }
+        .metric-card.yellow { border-left: 4px solid #f59e0b; background: linear-gradient(90deg, #fffbeb 0%, white 100%); }
+        .metric-card.green { border-left: 4px solid #10b981; background: linear-gradient(90deg, #f0fdf4 0%, white 100%); }
+        
+        .stTabs [data-baseweb="tab-list"] { 
+            gap: 8px;
+            background-color: #f1f5f9;
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 18px;
+        }
+        
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 10px;
+            height: 40px;
+            padding: 0 22px;
+            font-weight: 600;
+        }
+        
+        .stTabs [aria-selected="true"] { background-color: white; color: #1e293b; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        
+        .stRadio [data-baseweb="radio-group"] { gap: 12px; }
+        .stRadio [data-baseweb="radio"] { padding:6px 10px; border:1px solid #e2e8f0; border-radius:10px; background-color:white; }
+        .stRadio [aria-checked="true"] [data-baseweb="radio-mark"] { background-color:#6366f1 !important; border-color:#6366f1 !important; }
+        .stRadio div[data-testid="stMarkdownContainer"] p { margin:0 !important; }
+    </style>
+""", unsafe_allow_html=True)
 
 # Load and preprocess data
 @st.cache_data
@@ -29,808 +105,264 @@ def load_data():
 
 df = load_data()
 
-numerical_cols = [
-    'tenure',
-    'MonthlyCharges',
-    'TotalCharges'
-]
-
-@st.cache_resource
-def train_prediction_model(df):
-
-    df_full = df.drop('customerID', axis=1)
-
-    X_full = df_full.drop('Churn', axis=1)
-    y_full = df_full['Churn']
-
-    le = LabelEncoder()
-    y_full = le.fit_transform(y_full)
-
-    categorical_cols = X_full.select_dtypes(
-        include=['object']
-    ).columns
-
-    X_encoded = pd.get_dummies(
-        X_full,
-        columns=categorical_cols,
-        drop_first=True
-    )
-
-    scaler = StandardScaler()
-
-    numerical_cols = [
-        'tenure',
-        'MonthlyCharges',
-        'TotalCharges'
-    ]
-
-
-    X_encoded[numerical_cols] = scaler.fit_transform(
-        X_encoded[numerical_cols]
-    )
-
-    model = XGBClassifier(
-        random_state=42,
-        use_label_encoder=False,
-        eval_metric='logloss'
-    )
-
-    model.fit(X_encoded, y_full)
-
-    return model, scaler, X_encoded.columns
-
-prediction_model, prediction_scaler, model_columns = train_prediction_model(df)
-
-
-# tab selection
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Executive  Summary",
-    "Customer Insights",
-    "Model Performance",
-    "Predict Customer"
-])
-# Main title
-st.markdown("""
-<div style='padding:35px;box-shadow:0 8px 20px rgba(0,0,0,0.2);margin-bottom:30px;border-radius:15px;
-background:linear-gradient(90deg,#1E3A8A,#2563EB);color:white;text-align:center;'>
-
-<h1>📈 Customer Retention Intelligence Platform</h1>
-
-<p>Machine Learning Powered Customer Churn Prediction & Business Insights</p>
-
-</div>
-""", unsafe_allow_html=True)
-
-with tab1:
-
-    st.header("📊 Executive Summary")
-
-    # KPI Metrics
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric(
-            "👥 Customer Base",
-            f"{len(df):,}"
-        )
-
-    with col2:
-        churn_rate = (
-            (df['Churn'] == 'Yes').mean() * 100
-        )
-
-        st.metric(
-            "⚠️ Customers at Risk",
-            f"{churn_rate:.2f}%"
-        )
-
-    with col3:
-        avg_tenure = df['tenure'].mean()
-
-        st.metric(
-            "📅 Avg. Tenure",
-            f"{avg_tenure:.1f} months"
-        )
-
-    with col4:
-        avg_monthly = df['MonthlyCharges'].mean()
-
-        st.metric(
-            "💰 Avg. Monthly Revenue",
-            f"${avg_monthly:.2f}"
-        )
-
-    # Two-column layout
-    col_left, col_right = st.columns([1, 1])
-
-    with col_left:
-
-        st.info("""
-    ```
-
-    ### 🔍 Executive Insights
-
-    • Approximately **26% of customers** are at risk of churn.
-
-    • Customers with **month-to-month contracts** exhibit significantly higher churn rates.
-
-    • Customers with **short tenure periods** are more likely to leave.
-
-    • Early intervention strategies can substantially improve customer retention.
-    """)
-
-    with col_right:
-
-        st.subheader("📋 Dataset Snapshot")
-
-        st.dataframe(
-            df.head(5),
-            use_container_width=True,
-            height=250
-        )
-
-    # Quick Business Overview
-    st.success("""
-    ```
-
-    ### 📌 Business Objective
-
-    Develop a machine learning-powered customer retention intelligence platform to:
-
-    * Identify customers likely to churn.
-    * Understand key drivers influencing churn.
-    * Compare predictive models.
-    * Support proactive retention strategies through actionable recommendations.
-    """)
-
-
-with tab2:
-
-    st.header("📊 Customer Insights")
-
-    # Key Findings
-    st.success("""
-    ```
-
-    ### 🔍 Key Findings
-
-    ✔ Month-to-month contracts drive the highest churn.
-
-    ✔ Customers with tenure below 12 months are most vulnerable.
-
-    ✔ Higher monthly charges correlate with increased churn risk.
-
-    ✔ Long-term contracts contribute positively to customer retention.
-    """)
-
-    # First Row
-    row1_col1, row1_col2 = st.columns(2)
-
-    with row1_col1:
-
-        st.subheader("👥 Who Is Leaving?")
-
-        fig_churn = px.pie(
-            df,
-            names='Churn',
-            title='Customer Churn Distribution',
-            color_discrete_sequence=px.colors.qualitative.Set2
-        )
-
-        fig_churn.update_layout(
-            margin=dict(l=10, r=10, t=50, b=10),
-            height=320
-        )
-
-        st.plotly_chart(
-            fig_churn,
-            use_container_width=True
-        )
-
-    with row1_col2:
-
-        st.subheader("📑 Which Contracts Retain Customers?")
-
-        fig_contract = px.histogram(
-            df,
-            x='Contract',
-            color='Churn',
-            barmode='group',
-            title='Churn by Contract Type',
-            color_discrete_sequence=px.colors.qualitative.Set2
-        )
-
-        fig_contract.update_layout(
-            margin=dict(l=10, r=10, t=50, b=10),
-            height=320
-        )
-
-        st.plotly_chart(
-            fig_contract,
-            use_container_width=True
-        )
-
-    # Second Row
-    row2_col1, row2_col2 = st.columns(2)
-
-    with row2_col1:
-
-        st.subheader("⏳ When Do Customers Leave?")
-
-        fig_tenure = px.histogram(
-            df,
-            x='tenure',
-            color='Churn',
-            barmode='overlay',
-            nbins=30,
-            title='Tenure Distribution by Churn',
-            color_discrete_sequence=px.colors.qualitative.Set2
-        )
-
-        fig_tenure.update_layout(
-            margin=dict(l=10, r=10, t=50, b=10),
-            height=320
-        )
-
-        st.plotly_chart(
-            fig_tenure,
-            use_container_width=True
-        )
-
-    with row2_col2:
-
-        st.subheader("💰 Do Higher Charges Increase Churn?")
-
-        fig_monthly = px.histogram(
-            df,
-            x='MonthlyCharges',
-            color='Churn',
-            barmode='overlay',
-            nbins=30,
-            title='Monthly Charges Distribution by Churn',
-            color_discrete_sequence=px.colors.qualitative.Set2
-        )
-
-        fig_monthly.update_layout(
-            margin=dict(l=10, r=10, t=50, b=10),
-            height=320
-        )
-
-        st.plotly_chart(
-            fig_monthly,
-            use_container_width=True
-        )
-
-    
-with tab3:
-
-    st.header("🤖 Model Performance")
-
-    # -------------------------
-    # Feature Engineering
-    # -------------------------
-    df_model = df.drop('customerID', axis=1)
-
+# Train models and get metrics
+@st.cache_data
+def get_model_metrics():
+    df_model = df.drop(['customerID'], axis=1, errors='ignore')
     X = df_model.drop('Churn', axis=1)
     y = df_model['Churn']
-
+    
     le = LabelEncoder()
     y = le.fit_transform(y)
-
-    categorical_cols = X.select_dtypes(
-        include=['object']
-    ).columns
-
-    X = pd.get_dummies(
-        X,
-        columns=categorical_cols,
-        drop_first=True
-    )
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.2,
-        random_state=42,
-        stratify=y
-    )
-
+    X = pd.get_dummies(X, drop_first=True)
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    
+    numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
     scaler = StandardScaler()
+    X_train[numerical_cols] = scaler.fit_transform(X_train[numerical_cols])
+    X_test[numerical_cols] = scaler.transform(X_test[numerical_cols])
+    
+    models = {
+        'Logistic Regression': LogisticRegression(random_state=42),
+        'Random Forest': RandomForestClassifier(random_state=42, n_estimators=100),
+        'XGBoost': XGBClassifier(random_state=42, use_label_encoder=False, eval_metric='logloss')
+    }
+    
+    metrics = {}
+    for name, model in models.items():
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        y_pred_proba = model.predict_proba(X_test)[:, 1]
+        metrics[name] = {
+            'accuracy': accuracy_score(y_test, y_pred),
+            'precision': precision_score(y_test, y_pred),
+            'recall': recall_score(y_test, y_pred),
+            'f1': f1_score(y_test, y_pred),
+            'roc_auc': roc_auc_score(y_test, y_pred_proba)
+        }
+    return metrics
 
-    X_train[numerical_cols] = scaler.fit_transform(
-        X_train[numerical_cols]
+model_metrics = get_model_metrics()
+
+# Metrics for overview
+total = len(df)
+churned = (df['Churn'] == 'Yes').sum()
+churn_rate = (churned / total) * 100
+revenue_lost = df[df['Churn'] == 'Yes']['TotalCharges'].sum()
+avg_tenure = df['tenure'].mean()
+
+# Header
+st.markdown("""
+    <div class="header-bar">
+        <div class="logo">📈</div>
+        <div>
+            <h1 style="font-size: 22px; margin: 0; color: #1e293b; font-weight: 700;">Churn Analytics</h1>
+            <p style="margin: 4px 0 0 0; color: #64748b; font-size: 14px;">Telco Customer Insights</p>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
+
+# Top Metrics FIRST
+m1, m2, m3, m4 = st.columns(4, gap="medium")
+with m1:
+    st.markdown(f"""
+        <div class="metric-card blue">
+            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                <p style="margin:0;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Total Customers</p>
+                <p style="margin:10px 0 0 0;font-size:30px;font-weight:800;color:#1e293b;">{total:,}</p>
+            </div>
+            <div style="width:44px;height:44px;background-color:#dbeafe;border-radius:14px;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:22px;">👥</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+with m2:
+    st.markdown(f"""
+        <div class="metric-card red">
+            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                <p style="margin:0;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Churn Rate</p>
+                <p style="margin:10px 0 0 0;font-size:30px;font-weight:800;color:#ef4444;">{churn_rate:.1f}%</p>
+            </div>
+            <div style="width:44px;height:44px;background-color:#fee2e2;border-radius:14px;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:22px;">🚶</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+with m3:
+    st.markdown(f"""
+        <div class="metric-card yellow">
+            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                <p style="margin:0;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Revenue Lost</p>
+                <p style="margin:10px 0 0 0;font-size:30px;font-weight:800;color:#f59e0b;">${revenue_lost/1000000:.1f}M</p>
+            </div>
+            <div style="width:44px;height:44px;background-color:#fef3c7;border-radius:14px;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:22px;">💸</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+with m4:
+    st.markdown(f"""
+        <div class="metric-card green">
+            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%;">
+                <p style="margin:0;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Avg Tenure</p>
+                <p style="margin:10px 0 0 0;font-size:30px;font-weight:800;color:#10b981;">{avg_tenure:.0f} mo</p>
+            </div>
+            <div style="width:44px;height:44px;background-color:#dcfce7;border-radius:14px;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:22px;">⏱️</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("""
+    <div style="height: 24px;"></div>
+""", unsafe_allow_html=True)
+
+# TABS NOW (below metrics, above graphs)
+tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Churn Drivers", "Model", "Insights"])
+
+with tab1:
+    # Row 1: Churn & Contract Graphs
+    c1, c2 = st.columns([1, 1.3], gap="large")
+    with c1:
+        st.markdown("""
+            <div class="card">
+                <h3 style="font-size: 16px; margin: 0 0 4px 0; color: #1e293b; font-weight: 700;">Customer Status</h3>
+                <p style="margin:0 0 20px 0;color:#64748b;font-size:13px;">Churn vs Retention</p>
+        """, unsafe_allow_html=True)
+        fig = go.Figure(data=[go.Pie(
+            labels=['Retained', 'Churned'],
+            values=[total - churned, churned],
+            hole=0.7,
+            marker=dict(colors=['#06b6d4', '#ef4444']),
+            textinfo='none'
+        )])
+        fig.update_layout(showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=12)), margin=dict(t=0, b=60, l=0, r=0), height=220)
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with c2:
+        st.markdown("""
+            <div class="card">
+                <h3 style="font-size: 16px; margin: 0 0 4px 0; color: #1e293b; font-weight: 700;">Contract Type</h3>
+                <p style="margin:0 0 20px 0;color:#64748b;font-size:13px;">Month-to-month has highest churn</p>
+        """, unsafe_allow_html=True)
+        contract = df.groupby(['Contract', 'Churn']).size().reset_index(name='count')
+        contract_total = df.groupby('Contract').size().reset_index(name='total')
+        contract = contract.merge(contract_total, on='Contract')
+        contract['pct'] = (contract['count'] / contract['total']) * 100
+        contract = contract[contract['Churn'] == 'Yes']
+        fig = px.bar(contract, x='Contract', y='pct', color='Contract', color_discrete_map={'Month-to-month':'#ef4444','One year':'#f59e0b','Two year':'#06b6d4'})
+        fig.update_layout(showlegend=False, yaxis_title='', xaxis_title='', yaxis=dict(range=[0,60]), margin=dict(t=0,b=0,l=0,r=0), height=220, plot_bgcolor='white')
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+with tab2:
+    st.markdown("""
+        <div class="card">
+            <h3 style="font-size: 16px; margin: 0 0 4px 0; color: #1e293b; font-weight: 700;">Tenure vs Churn</h3>
+            <p style="margin:0 0 20px 0;color:#64748b;font-size:13px;">New customers are most likely to churn</p>
+    """, unsafe_allow_html=True)
+    df['tenure_bin'] = pd.cut(df['tenure'], bins=[0,12,24,36,48,60,72], labels=['0-12','13-24','25-36','37-48','49-60','61-72'])
+    tenure_churn = df.groupby('tenure_bin')['Churn'].apply(lambda x: (x == 'Yes').mean() * 100).reset_index()
+    fig = px.line(tenure_churn, x='tenure_bin', y='Churn', markers=True, color_discrete_sequence=['#7c3aed'])
+    fig.update_layout(yaxis_title='Churn (%)', xaxis_title='Tenure (months)', yaxis=dict(range=[0,50]), margin=dict(t=0,b=0,l=0,r=0), height=260, plot_bgcolor='white')
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+    
+    c1, c2 = st.columns(2, gap="large")
+    with c1:
+        st.markdown("""
+            <div class="card">
+                <h3 style="font-size: 16px; margin: 0 0 4px 0; color: #1e293b; font-weight: 700;">Internet Service</h3>
+                <p style="margin:0 0 20px 0;color:#64748b;font-size:13px;">Fiber optic churns most</p>
+        """, unsafe_allow_html=True)
+        internet = df.groupby(['InternetService', 'Churn']).size().reset_index(name='count')
+        internet_total = df.groupby('InternetService').size().reset_index(name='total')
+        internet = internet.merge(internet_total, on='InternetService')
+        internet['pct'] = (internet['count'] / internet['total']) * 100
+        internet = internet[internet['Churn'] == 'Yes']
+        fig = px.bar(internet, y='InternetService', x='pct', color='InternetService', color_discrete_sequence=['#3b82f6', '#2563eb', '#1d4ed8'], orientation='h')
+        fig.update_layout(showlegend=False, xaxis_title='Churn (%)', yaxis_title='', xaxis=dict(range=[0,60]), margin=dict(t=0,b=0,l=0,r=0), height=210, plot_bgcolor='white')
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with c2:
+        st.markdown("""
+            <div class="card">
+                <h3 style="font-size: 16px; margin: 0 0 4px 0; color: #1e293b; font-weight: 700;">Payment Method</h3>
+                <p style="margin:0 0 20px 0;color:#64748b;font-size:13px;">Electronic check is riskiest</p>
+        """, unsafe_allow_html=True)
+        payment = df.groupby(['PaymentMethod', 'Churn']).size().reset_index(name='count')
+        payment_total = df.groupby('PaymentMethod').size().reset_index(name='total')
+        payment = payment.merge(payment_total, on='PaymentMethod')
+        payment['pct'] = (payment['count'] / payment['total']) * 100
+        payment = payment[payment['Churn'] == 'Yes']
+        fig = px.bar(payment, y='PaymentMethod', x='pct', color='PaymentMethod', color_discrete_sequence=['#ef4444', '#06b6d4', '#06b6d4', '#06b6d4'], orientation='h')
+        fig.update_layout(showlegend=False, xaxis_title='Churn (%)', yaxis_title='', xaxis=dict(range=[0,60]), margin=dict(t=0,b=0,l=0,r=0), height=210, plot_bgcolor='white')
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+with tab3:
+    st.markdown("""
+        <h3 style="font-size:14px; margin:0 0 6px 0; color:#1e293b;font-weight:700;">Model Performance</h3>
+    """, unsafe_allow_html=True)
+    
+    # Radio buttons for model selection
+    selected_model = st.radio(
+        "Select Model",
+        ["Logistic Regression", "Random Forest", "XGBoost"],
+        horizontal=True,
+        index=0,
+        label_visibility="collapsed"
     )
+    
+    # Get metrics for selected model
+    m = model_metrics[selected_model]
+    
+    st.markdown(f"""
+        <p style="margin:6px 0 8px 0;color:#64748b;font-size:12px;">{selected_model} Results</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+            <div style="background: white; border-left: 4px solid #3b82f6; background: linear-gradient(90deg, #f0f9ff 0%, white 100%); padding:14px;border-radius:16px;text-align:center; box-shadow: 0 2px 10px rgba(0,0,0,0.04);">
+                <p style="margin:0;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Accuracy</p>
+                <p style="margin:6px 0 0 0;font-size:24px;font-weight:800;color:#1e293b;">{m['accuracy']:.1%}</p>
+            </div>
+            <div style="background: white; border-left: 4px solid #10b981; background: linear-gradient(90deg, #f0fdf4 0%, white 100%); padding:14px;border-radius:16px;text-align:center; box-shadow: 0 2px 10px rgba(0,0,0,0.04);">
+                <p style="margin:0;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Precision</p>
+                <p style="margin:6px 0 0 0;font-size:24px;font-weight:800;color:#1e293b;">{m['precision']:.1%}</p>
+            </div>
+            <div style="background: white; border-left: 4px solid #f59e0b; background: linear-gradient(90deg, #fef7ed 0%, white 100%); padding:14px;border-radius:16px;text-align:center; box-shadow: 0 2px 10px rgba(0,0,0,0.04);">
+                <p style="margin:0;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Recall</p>
+                <p style="margin:6px 0 0 0;font-size:24px;font-weight:800;color:#1e293b;">{m['recall']:.1%}</p>
+            </div>
+            <div style="background: white; border-left: 4px solid #8b5cf6; background: linear-gradient(90deg, #fdf4ff 0%, white 100%); padding:14px;border-radius:16px;text-align:center; box-shadow: 0 2px 10px rgba(0,0,0,0.04);">
+                <p style="margin:0;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">ROC-AUC</p>
+                <p style="margin:6px 0 0 0;font-size:24px;font-weight:800;color:#1e293b;">{m['roc_auc']:.1%}</p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
-    X_test[numerical_cols] = scaler.transform(
-        X_test[numerical_cols]
-    )
-
-    # -------------------------
-    # Model Selection
-    # -------------------------
-    st.subheader("⚙️ Model Selection")
-
-    model_option = st.radio(
-        "Choose a model:",
-        [
-            "Logistic Regression",
-            "Random Forest",
-            "XGBoost"
-        ],
-        horizontal=True
-    )
-
-    if model_option == "Logistic Regression":
-
-        model = LogisticRegression(
-            random_state=42
-        )
-
-    elif model_option == "Random Forest":
-
-        model = RandomForestClassifier(
-            random_state=42
-        )
-
-    else:
-
-        model = XGBClassifier(
-            random_state=42,
-            use_label_encoder=False,
-            eval_metric='logloss'
-        )
-
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-
-    y_pred_proba = model.predict_proba(X_test)[:, 1]
-
-    # -------------------------
-    # Selected Model
-    # -------------------------
-    st.success(
-        f"🏆 Selected Model: {model_option}"
-    )
-
-    # -------------------------
-    # Metrics
-    # -------------------------
-    st.subheader("📈 Performance Metrics")
-
-    row1 = st.columns(3)
-
-    with row1[0]:
-        st.metric(
-            "Accuracy",
-            f"{accuracy_score(y_test, y_pred):.4f}"
-        )
-
-    with row1[1]:
-        st.metric(
-            "Precision",
-            f"{precision_score(y_test, y_pred):.4f}"
-        )
-
-    with row1[2]:
-        st.metric(
-            "Recall",
-            f"{recall_score(y_test, y_pred):.4f}"
-        )
-
-    row2 = st.columns(2)
-
-    with row2[0]:
-        st.metric(
-            "F1 Score",
-            f"{f1_score(y_test, y_pred):.4f}"
-        )
-
-    with row2[1]:
-        st.metric(
-            "ROC-AUC",
-            f"{roc_auc_score(y_test, y_pred_proba):.4f}"
-        )
-
-    # -------------------------
-    # Feature Importance
-    # -------------------------
-    st.subheader("🔍 Feature Importance")
-
-    if model_option != "Logistic Regression":
-
-        importance = pd.DataFrame({
-            "Feature": X.columns,
-            "Importance": model.feature_importances_
-        })
-
-        importance = importance.sort_values(
-            "Importance",
-            ascending=False
-        ).head(10)
-
-        fig_importance = px.bar(
-            importance,
-            x="Importance",
-            y="Feature",
-            orientation='h',
-            title="Top Factors Influencing Customer Churn"
-        )
-
-        fig_importance.update_layout(
-            height=300,
-            yaxis={
-                "categoryorder": "total ascending"
-            }
-        )
-
-        st.plotly_chart(
-            fig_importance,
-            use_container_width=True
-        )
-
-    else:
-
-        st.info(
-            "Feature importance is available for Random Forest and XGBoost models."
-        )
-
-    # -------------------------
-    # Detailed Reports
-    # -------------------------
-    with st.expander("🎯 View Confusion Matrix"):
-
-        cm = confusion_matrix(
-            y_test,
-            y_pred
-        )
-
-        fig_cm = px.imshow(
-            cm,
-            labels={
-                "x": "Predicted",
-                "y": "Actual",
-                "color": "Count"
-            },
-            x=['No Churn', 'Churn'],
-            y=['No Churn', 'Churn'],
-            color_continuous_scale='Blues',
-            text_auto=True
-        )
-
-        st.plotly_chart(
-            fig_cm,
-            use_container_width=True
-        )
-
-    with st.expander("📋 View Classification Report"):
-
-        report = classification_report(
-            y_test,
-            y_pred,
-            output_dict=True
-        )
-
-        report_df = pd.DataFrame(
-            report
-        ).transpose()
-
-        st.dataframe(
-            report_df,
-            use_container_width=True,
-            height=250
-        )
-
-        st.success("""
-    ```
-
-    ### Business Interpretation
-
-    A higher recall score ensures that customers likely to churn are identified early, enabling proactive retention strategies.
-    """)
-                
 with tab4:
-
-    st.header("🔮 Customer Churn Predictor")
-
-    st.markdown(
-        "Predict customer churn risk and receive actionable retention recommendations."
-    )
-
-    # -------------------------
-    # Customer Profile Inputs
-    # -------------------------
-    st.subheader("📝 Customer Profile")
-
-    with st.expander("👤 Personal Information", expanded=True):
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            gender = st.selectbox(
-                "Gender",
-                ["Male", "Female"]
-            )
-
-            senior_citizen = st.selectbox(
-                "Senior Citizen",
-                ["No", "Yes"]
-            )
-
-        with col2:
-            partner = st.selectbox(
-                "Partner",
-                ["No", "Yes"]
-            )
-
-            dependents = st.selectbox(
-                "Dependents",
-                ["No", "Yes"]
-            )
-
-    with st.expander("📞 Service Details", expanded=True):
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            phone_service = st.selectbox(
-                "Phone Service",
-                ["No", "Yes"]
-            )
-
-            multiple_lines = st.selectbox(
-                "Multiple Lines",
-                ["No", "Yes", "No phone service"]
-            )
-
-            internet_service = st.selectbox(
-                "Internet Service",
-                ["DSL", "Fiber optic", "No"]
-            )
-
-            online_security = st.selectbox(
-                "Online Security",
-                ["No", "Yes", "No internet service"]
-            )
-
-            online_backup = st.selectbox(
-                "Online Backup",
-                ["No", "Yes", "No internet service"]
-            )
-
-        with col2:
-            device_protection = st.selectbox(
-                "Device Protection",
-                ["No", "Yes", "No internet service"]
-            )
-
-            tech_support = st.selectbox(
-                "Tech Support",
-                ["No", "Yes", "No internet service"]
-            )
-
-            streaming_tv = st.selectbox(
-                "Streaming TV",
-                ["No", "Yes", "No internet service"]
-            )
-
-            streaming_movies = st.selectbox(
-                "Streaming Movies",
-                ["No", "Yes", "No internet service"]
-            )
-
-    with st.expander("💳 Subscription Details", expanded=True):
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            tenure = st.slider(
-                "Tenure (months)",
-                0,
-                72,
-                12
-            )
-
-            contract = st.selectbox(
-                "Contract",
-                [
-                    "Month-to-month",
-                    "One year",
-                    "Two year"
-                ]
-            )
-
-        with col2:
-            paperless_billing = st.selectbox(
-                "Paperless Billing",
-                ["No", "Yes"]
-            )
-
-            payment_method = st.selectbox(
-                "Payment Method",
-                [
-                    "Electronic check",
-                    "Mailed check",
-                    "Bank transfer (automatic)",
-                    "Credit card (automatic)"
-                ]
-            )
-
-            monthly_charges = st.number_input(
-                "Monthly Charges ($)",
-                min_value=0.0,
-                max_value=200.0,
-                value=50.0
-            )
-
-    total_charges = tenure * monthly_charges
-
-    # -------------------------
-    # Input Data
-    # -------------------------
-    input_data = pd.DataFrame({
-        'gender': [gender],
-        'SeniorCitizen': [1 if senior_citizen == "Yes" else 0],
-        'Partner': [partner],
-        'Dependents': [dependents],
-        'tenure': [tenure],
-        'PhoneService': [phone_service],
-        'MultipleLines': [multiple_lines],
-        'InternetService': [internet_service],
-        'OnlineSecurity': [online_security],
-        'OnlineBackup': [online_backup],
-        'DeviceProtection': [device_protection],
-        'TechSupport': [tech_support],
-        'StreamingTV': [streaming_tv],
-        'StreamingMovies': [streaming_movies],
-        'Contract': [contract],
-        'PaperlessBilling': [paperless_billing],
-        'PaymentMethod': [payment_method],
-        'MonthlyCharges': [monthly_charges],
-        'TotalCharges': [total_charges]
-    })
-
-    left_col, right_col = st.columns([2, 1])
-
-    with right_col:
-
-        st.subheader("🔍 Customer Summary")
-
-        st.dataframe(
-            input_data,
-            use_container_width=True,
-            height=250,
-            hide_index=True
-        )
-
-
-    predict = st.button(
-    "🚀 Predict Churn Risk",
-    use_container_width=True,
-    type="primary"
-    )
-
-
-    if predict:
-
-        df_full = df.drop('customerID', axis=1)
-
-        X_full = df_full.drop('Churn', axis=1)
-
-        combined = pd.concat(
-            [X_full, input_data],
-            axis=0
-        )
-
-        categorical_cols = combined.select_dtypes(
-            include=['object']
-        ).columns
-
-        combined = pd.get_dummies(
-            combined,
-            columns=categorical_cols,
-            drop_first=True
-        )
-
-        input_encoded = combined.iloc[-1:]
-
-        input_encoded = input_encoded.reindex(
-            columns=model_columns,
-            fill_value=0
-        )
-        
-        input_encoded[numerical_cols] = prediction_scaler.transform(
-            input_encoded[numerical_cols]
-        )
-
-        prediction = prediction_model.predict(input_encoded)
-
-        prediction_proba = prediction_model.predict_proba(input_encoded)
-
-        churn_prob = prediction_proba[0][1] * 100
-
-        st.markdown("---")
-        
-        st.success("Prediction completed successfully.")
-        st.subheader("📊 Prediction Results")
-
-        gauge_col, result_col = st.columns([2, 1])
-
-        with gauge_col:
-
-            st.subheader("📈 Churn Risk Gauge")
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True
-            )
-
-        with result_col:
-
-            st.subheader("📊 Prediction Result")
-
-            st.metric(
-                "Churn Probability",
-                f"{churn_prob:.2f}%"
-            )
-
-            if prediction[0] == 1:
-
-                st.error(
-                    "⚠️ Likely to Churn"
-                )
-
-            else:
-
-                st.success(
-                    "✅ Likely to Stay"
-                )
-
-        # -------------------------
-        # Recommendations
-        # -------------------------
-        st.subheader("💡 Recommended Actions")
-
-        if churn_prob >= 70:
-
-            st.markdown("""
-            ### Immediate Actions
-
-            • Offer personalized retention discounts.
-
-            • Assign a customer success representative.
-
-            • Recommend annual subscription upgrades.
-
-            • Conduct a customer satisfaction follow-up.
-
-            • Prioritize intervention to prevent revenue loss.
-            """)
-
-        elif churn_prob >= 40:
-
-           st.markdown("""
-            ### Preventive Actions
-
-            • Offer loyalty rewards.
-
-            • Recommend bundled services.
-
-            • Increase engagement through targeted campaigns.
-
-            • Monitor future customer interactions.
-            """)
-
-        else:
-
-            st.markdown("""
-            ### Maintenance Actions
-
-            • Continue delivering excellent service.
-
-            • Encourage referrals and testimonials.
-
-            • Promote premium offerings.
-
-            • Maintain regular customer engagement.
-            """)
+    st.markdown("""
+        <div class="card">
+            <h3 style="font-size: 16px; margin: 0 0 16px 0; color: #1e293b; font-weight: 700;">Key Insights</h3>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;">
+                <div style="padding:14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">
+                    <h4 style="font-size:14px;margin:0 0 6px 0;color:#1e293b;font-weight:700;">📊 Highest Churn</h4>
+                    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.5;">Month-to-month + Fiber optic + Electronic check</p>
+                </div>
+                <div style="padding:14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">
+                    <h4 style="font-size:14px;margin:0 0 6px 0;color:#1e293b;font-weight:700;">🛡️ Best Retention</h4>
+                    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.5;">Two-year contract + Tech support + Auto payment</p>
+                </div>
+                <div style="padding:14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">
+                    <h4 style="font-size:14px;margin:0 0 6px 0;color:#1e293b;font-weight:700;">⏱️ Critical Period</h4>
+                    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.5;">First 12 months - 40%+ churn risk</p>
+                </div>
+                <div style="padding:14px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;">
+                    <h4 style="font-size:14px;margin:0 0 6px 0;color:#1e293b;font-weight:700;">💡 Opportunity</h4>
+                    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.5;">Offer discounts for 1-2 year contracts</p>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
